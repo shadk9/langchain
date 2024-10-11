@@ -26,8 +26,11 @@ class InvalidTool(BaseTool):
         """Use the tool."""
         available_tool_names_str = ", ".join([tool for tool in available_tool_names])
         return (
-            f"{requested_tool_name} is not a valid tool, "
-            f"try one of [{available_tool_names_str}]."
+           f"""The "Action" step must only consist of one of the following tools: [{available_tool_names_str}]. Do not include any reasoning in this step.
+                Example:
+                Action: python_repl_ast
+                Action Input: <Code or instruction>
+            """
         )
 
     async def _arun(
