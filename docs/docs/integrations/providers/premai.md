@@ -229,10 +229,9 @@ query_result = embedder.embed_query(query)
 
 print(query_result[:5])
 ```
-
-:::note
+<Note>
 Setting `model_name` argument in mandatory for PremAIEmbeddings unlike chat. 
-:::
+</Note>
 
 Finally, let's embed some sample document
 
@@ -287,7 +286,7 @@ In order to pass tools and let the LLM choose the tool it needs to call, we need
 
 ```python
 from langchain_core.tools import tool
-from pydantic import BaseModel, Field 
+from langchain_core.pydantic_v1 import BaseModel, Field 
 
 # Define the schema for function arguments
 class OperationInput(BaseModel):

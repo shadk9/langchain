@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 
 from langchain_core.agents import (
     AgentAction,
+    AgentActionMessageLog,
     AgentFinish,
     AgentStep,
 )
@@ -34,9 +35,7 @@ from langchain.agents import (
 from langchain.agents.output_parsers.openai_tools import OpenAIToolAgentAction
 from tests.unit_tests.callbacks.fake_callback_handler import FakeCallbackHandler
 from tests.unit_tests.llms.fake_chat_model import GenericFakeChatModel
-from tests.unit_tests.stubs import (
-    _AnyIdAIMessageChunk,
-)
+from tests.unit_tests.stubs import AnyStr
 
 
 class FakeListLLM(LLM):
@@ -786,26 +785,6 @@ def _make_func_invocation(name: str, **kwargs: Any) -> AIMessage:
     )
 
 
-def _recursive_dump(obj: Any) -> Any:
-    """Recursively dump the object if encountering any pydantic models."""
-    if isinstance(obj, dict):
-        return {
-            k: _recursive_dump(v)
-            for k, v in obj.items()
-            if k != "id"  # Remove the id field for testing purposes
-        }
-    if isinstance(obj, list):
-        return [_recursive_dump(v) for v in obj]
-    if hasattr(obj, "dict"):
-        # if the object contains an ID field, we'll remove it for testing purposes
-        if hasattr(obj, "id"):
-            d = obj.model_dump()
-            d.pop("id")
-            return _recursive_dump(d)
-        return _recursive_dump(obj.model_dump())
-    return obj
-
-
 async def test_openai_agent_with_streaming() -> None:
     """Test openai agent with streaming."""
     infinite_cycle = cycle(
@@ -852,93 +831,72 @@ async def test_openai_agent_with_streaming() -> None:
 
     # astream
     chunks = [chunk async for chunk in executor.astream({"question": "hello"})]
-    assert _recursive_dump(chunks) == [
+    assert chunks == [
         {
             "actions": [
-                {
-                    "log": "\nInvoking: `find_pet` with `{'pet': 'cat'}`\n\n\n",
-                    "message_log": [
-                        {
-                            "additional_kwargs": {
+                AgentActionMessageLog(
+                    tool="find_pet",
+                    tool_input={"pet": "cat"},
+                    log="\nInvoking: `find_pet` with `{'pet': 'cat'}`\n\n\n",
+                    message_log=[
+                        AIMessageChunk(
+                            id=AnyStr(),
+                            content="",
+                            additional_kwargs={
                                 "function_call": {
-                                    "arguments": '{"pet": ' '"cat"}',
                                     "name": "find_pet",
+                                    "arguments": '{"pet": "cat"}',
                                 }
                             },
-                            "content": "",
-                            "name": None,
-                            "response_metadata": {},
-                            "type": "AIMessageChunk",
-                        }
+                        )
                     ],
-                    "tool": "find_pet",
-                    "tool_input": {"pet": "cat"},
-                    "type": "AgentActionMessageLog",
-                }
+                )
             ],
             "messages": [
-                {
-                    "additional_kwargs": {
+                AIMessageChunk(
+                    id=AnyStr(),
+                    content="",
+                    additional_kwargs={
                         "function_call": {
-                            "arguments": '{"pet": ' '"cat"}',
                             "name": "find_pet",
+                            "arguments": '{"pet": "cat"}',
                         }
                     },
-                    "content": "",
-                    "example": False,
-                    "invalid_tool_calls": [],
-                    "name": None,
-                    "response_metadata": {},
-                    "tool_call_chunks": [],
-                    "tool_calls": [],
-                    "type": "AIMessageChunk",
-                    "usage_metadata": None,
-                }
+                )
             ],
         },
         {
             "messages": [
-                {
-                    "additional_kwargs": {},
-                    "content": "Spying from under the bed.",
-                    "name": "find_pet",
-                    "response_metadata": {},
-                    "type": "function",
-                }
+                FunctionMessage(content="Spying from under the bed.", name="find_pet")
             ],
             "steps": [
-                {
-                    "action": {
-                        "log": "\n"
-                        "Invoking: `find_pet` with `{'pet': 'cat'}`\n"
-                        "\n"
-                        "\n",
-                        "tool": "find_pet",
-                        "tool_input": {"pet": "cat"},
-                        "type": "AgentActionMessageLog",
-                    },
-                    "observation": "Spying from under the bed.",
-                }
+                AgentStep(
+                    action=AgentActionMessageLog(
+                        tool="find_pet",
+                        tool_input={"pet": "cat"},
+                        log="\nInvoking: `find_pet` with `{'pet': 'cat'}`\n\n\n",
+                        message_log=[
+                            AIMessageChunk(
+                                id=AnyStr(),
+                                content="",
+                                additional_kwargs={
+                                    "function_call": {
+                                        "name": "find_pet",
+                                        "arguments": '{"pet": "cat"}',
+                                    }
+                                },
+                            )
+                        ],
+                    ),
+                    observation="Spying from under the bed.",
+                )
             ],
         },
         {
-            "messages": [
-                {
-                    "additional_kwargs": {},
-                    "content": "The cat is spying from under the bed.",
-                    "example": False,
-                    "invalid_tool_calls": [],
-                    "name": None,
-                    "response_metadata": {},
-                    "tool_calls": [],
-                    "type": "ai",
-                    "usage_metadata": None,
-                }
-            ],
+            "messages": [AIMessage(content="The cat is spying from under the bed.")],
             "output": "The cat is spying from under the bed.",
         },
     ]
-
     #
     # # astream_log
     log_patches = [
@@ -983,7 +941,7 @@ def _make_tools_invocation(name_to_arguments: Dict[str, Dict[str, Any]]) -> AIMe
         AIMessage that represents a request to invoke a tool.
     """
     raw_tool_calls = [
-        {"function": {"name": name, "arguments": json.dumps(arguments)}, "id": str(idx)}
+        {"function": {"name": name, "arguments": json.dumps(arguments)}, "id": idx}
         for idx, (name, arguments) in enumerate(name_to_arguments.items())
     ]
     tool_calls = [
@@ -1072,7 +1030,8 @@ async def test_openai_agent_tools_agent() -> None:
                             tool_input={"pet": "cat"},
                             log="\nInvoking: `find_pet` with `{'pet': 'cat'}`\n\n\n",
                             message_log=[
-                                _AnyIdAIMessageChunk(
+                                AIMessageChunk(
+                                    id=AnyStr(),
                                     content="",
                                     additional_kwargs={
                                         "tool_calls": [
@@ -1081,14 +1040,14 @@ async def test_openai_agent_tools_agent() -> None:
                                                     "name": "find_pet",
                                                     "arguments": '{"pet": "cat"}',
                                                 },
-                                                "id": "0",
+                                                "id": 0,
                                             },
                                             {
                                                 "function": {
                                                     "name": "check_time",
                                                     "arguments": "{}",
                                                 },
-                                                "id": "1",
+                                                "id": 1,
                                             },
                                         ]
                                     },
@@ -1098,7 +1057,8 @@ async def test_openai_agent_tools_agent() -> None:
                         )
                     ],
                     "messages": [
-                        _AnyIdAIMessageChunk(
+                        AIMessageChunk(
+                            id=AnyStr(),
                             content="",
                             additional_kwargs={
                                 "tool_calls": [
@@ -1107,14 +1067,14 @@ async def test_openai_agent_tools_agent() -> None:
                                             "name": "find_pet",
                                             "arguments": '{"pet": "cat"}',
                                         },
-                                        "id": "0",
+                                        "id": 0,
                                     },
                                     {
                                         "function": {
                                             "name": "check_time",
                                             "arguments": "{}",
                                         },
-                                        "id": "1",
+                                        "id": 1,
                                     },
                                 ]
                             },
@@ -1128,7 +1088,8 @@ async def test_openai_agent_tools_agent() -> None:
                             tool_input={},
                             log="\nInvoking: `check_time` with `{}`\n\n\n",
                             message_log=[
-                                _AnyIdAIMessageChunk(
+                                AIMessageChunk(
+                                    id=AnyStr(),
                                     content="",
                                     additional_kwargs={
                                         "tool_calls": [
@@ -1137,14 +1098,14 @@ async def test_openai_agent_tools_agent() -> None:
                                                     "name": "find_pet",
                                                     "arguments": '{"pet": "cat"}',
                                                 },
-                                                "id": "0",
+                                                "id": 0,
                                             },
                                             {
                                                 "function": {
                                                     "name": "check_time",
                                                     "arguments": "{}",
                                                 },
-                                                "id": "1",
+                                                "id": 1,
                                             },
                                         ]
                                     },
@@ -1154,7 +1115,8 @@ async def test_openai_agent_tools_agent() -> None:
                         )
                     ],
                     "messages": [
-                        _AnyIdAIMessageChunk(
+                        AIMessageChunk(
+                            id=AnyStr(),
                             content="",
                             additional_kwargs={
                                 "tool_calls": [
@@ -1163,14 +1125,14 @@ async def test_openai_agent_tools_agent() -> None:
                                             "name": "find_pet",
                                             "arguments": '{"pet": "cat"}',
                                         },
-                                        "id": "0",
+                                        "id": 0,
                                     },
                                     {
                                         "function": {
                                             "name": "check_time",
                                             "arguments": "{}",
                                         },
-                                        "id": "1",
+                                        "id": 1,
                                     },
                                 ]
                             },
@@ -1190,7 +1152,8 @@ async def test_openai_agent_tools_agent() -> None:
                                 tool_input={"pet": "cat"},
                                 log="\nInvoking: `find_pet` with `{'pet': 'cat'}`\n\n\n",  # noqa: E501
                                 message_log=[
-                                    _AnyIdAIMessageChunk(
+                                    AIMessageChunk(
+                                        id=AnyStr(),
                                         content="",
                                         additional_kwargs={
                                             "tool_calls": [
@@ -1199,14 +1162,14 @@ async def test_openai_agent_tools_agent() -> None:
                                                         "name": "find_pet",
                                                         "arguments": '{"pet": "cat"}',
                                                     },
-                                                    "id": "0",
+                                                    "id": 0,
                                                 },
                                                 {
                                                     "function": {
                                                         "name": "check_time",
                                                         "arguments": "{}",
                                                     },
-                                                    "id": "1",
+                                                    "id": 1,
                                                 },
                                             ]
                                         },
@@ -1232,7 +1195,8 @@ async def test_openai_agent_tools_agent() -> None:
                                 tool_input={},
                                 log="\nInvoking: `check_time` with `{}`\n\n\n",
                                 message_log=[
-                                    _AnyIdAIMessageChunk(
+                                    AIMessageChunk(
+                                        id=AnyStr(),
                                         content="",
                                         additional_kwargs={
                                             "tool_calls": [
@@ -1241,14 +1205,14 @@ async def test_openai_agent_tools_agent() -> None:
                                                         "name": "find_pet",
                                                         "arguments": '{"pet": "cat"}',
                                                     },
-                                                    "id": "0",
+                                                    "id": 0,
                                                 },
                                                 {
                                                     "function": {
                                                         "name": "check_time",
                                                         "arguments": "{}",
                                                     },
-                                                    "id": "1",
+                                                    "id": 1,
                                                 },
                                             ]
                                         },

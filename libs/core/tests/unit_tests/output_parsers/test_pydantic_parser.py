@@ -3,17 +3,22 @@
 from enum import Enum
 from typing import Literal, Optional
 
-import pydantic
+import pydantic  # pydantic: ignore
 import pytest
-from pydantic import BaseModel, Field
-from pydantic.v1 import BaseModel as V1BaseModel
 
 from langchain_core.exceptions import OutputParserException
 from langchain_core.language_models import ParrotFakeChatModel
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.output_parsers.json import JsonOutputParser
 from langchain_core.prompts.prompt import PromptTemplate
-from langchain_core.utils.pydantic import TBaseModel
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_core.utils.pydantic import PYDANTIC_MAJOR_VERSION, TBaseModel
+
+V1BaseModel = pydantic.BaseModel
+if PYDANTIC_MAJOR_VERSION == 2:
+    from pydantic.v1 import BaseModel  # pydantic: ignore
+
+    V1BaseModel = BaseModel  # type: ignore
 
 
 class ForecastV2(pydantic.BaseModel):
@@ -148,7 +153,7 @@ def test_pydantic_output_parser() -> None:
 
     result = pydantic_parser.parse(DEF_RESULT)
     print("parse_result:", result)  # noqa: T201
-    assert result == DEF_EXPECTED_RESULT
+    assert DEF_EXPECTED_RESULT == result
     assert pydantic_parser.OutputType is TestModel
 
 
@@ -174,7 +179,7 @@ def test_pydantic_output_parser_type_inference() -> None:
     # Ignoring mypy error that appears in python 3.8, but not 3.11.
     # This seems to be functionally correct, so we'll ignore the error.
     pydantic_parser = PydanticOutputParser(pydantic_object=SampleModel)  # type: ignore
-    schema = pydantic_parser.get_output_schema().model_json_schema()
+    schema = pydantic_parser.get_output_schema().schema()
 
     assert schema == {
         "properties": {
@@ -189,7 +194,7 @@ def test_pydantic_output_parser_type_inference() -> None:
 
 def test_format_instructions_preserves_language() -> None:
     """Test format instructions does not attempt to encode into ascii."""
-    from pydantic import BaseModel, Field
+    from langchain_core.pydantic_v1 import BaseModel, Field
 
     description = (
         "你好, こんにちは, नमस्ते, Bonjour, Hola, "

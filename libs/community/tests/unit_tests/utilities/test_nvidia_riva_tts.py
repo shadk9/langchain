@@ -57,10 +57,7 @@ def tts() -> RivaTTS:
 def test_init(tts: RivaTTS) -> None:
     """Test that ASR accepts valid arguments."""
     for key, expected_val in CONFIG.items():
-        if key == "url":
-            assert str(tts.url) == expected_val + "/"  # type: ignore
-        else:
-            assert getattr(tts, key, None) == expected_val
+        assert getattr(tts, key, None) == expected_val
 
 
 @pytest.mark.requires("riva.client")

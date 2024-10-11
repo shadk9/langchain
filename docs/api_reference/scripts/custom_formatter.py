@@ -17,10 +17,7 @@ def process_toc_h3_elements(html_content: str) -> str:
 
     # Process each element
     for element in toc_h3_elements:
-        try:
-            element = element.a.code.span
-        except Exception:
-            continue
+        element = element.a.code.span
         # Get the text content of the element
         content = element.get_text()
 

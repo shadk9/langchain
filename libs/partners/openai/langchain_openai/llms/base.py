@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from typing import (
     AbstractSet,
@@ -26,10 +27,13 @@ from langchain_core.callbacks import (
 )
 from langchain_core.language_models.llms import BaseLLM
 from langchain_core.outputs import Generation, GenerationChunk, LLMResult
-from langchain_core.utils import get_pydantic_field_names
-from langchain_core.utils.utils import _build_model_kwargs, from_env, secret_from_env
-from pydantic import ConfigDict, Field, SecretStr, model_validator
-from typing_extensions import Self
+from langchain_core.pydantic_v1 import Field, SecretStr, root_validator
+from langchain_core.utils import (
+    convert_to_secret_str,
+    get_from_dict_or_env,
+    get_pydantic_field_names,
+)
+from langchain_core.utils.utils import build_extra_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -86,26 +90,15 @@ class BaseOpenAI(BaseLLM):
     """Generates best_of completions server-side and returns the "best"."""
     model_kwargs: Dict[str, Any] = Field(default_factory=dict)
     """Holds any model parameters valid for `create` call not explicitly specified."""
-    openai_api_key: Optional[SecretStr] = Field(
-        alias="api_key", default_factory=secret_from_env("OPENAI_API_KEY", default=None)
-    )
+    openai_api_key: Optional[SecretStr] = Field(default=None, alias="api_key")
     """Automatically inferred from env var `OPENAI_API_KEY` if not provided."""
-    openai_api_base: Optional[str] = Field(
-        alias="base_url", default_factory=from_env("OPENAI_API_BASE", default=None)
-    )
+    openai_api_base: Optional[str] = Field(default=None, alias="base_url")
     """Base URL path for API requests, leave blank if not using a proxy or service 
         emulator."""
-    openai_organization: Optional[str] = Field(
-        alias="organization",
-        default_factory=from_env(
-            ["OPENAI_ORG_ID", "OPENAI_ORGANIZATION"], default=None
-        ),
-    )
+    openai_organization: Optional[str] = Field(default=None, alias="organization")
     """Automatically inferred from env var `OPENAI_ORG_ID` if not provided."""
     # to support explicit proxy for OpenAI
-    openai_proxy: Optional[str] = Field(
-        default_factory=from_env("OPENAI_PROXY", default=None)
-    )
+    openai_proxy: Optional[str] = None
     batch_size: int = 20
     """Batch size to use when passing multiple documents to generate."""
     request_timeout: Union[float, Tuple[float, float], Any, None] = Field(
@@ -153,48 +146,74 @@ class BaseOpenAI(BaseLLM):
     """Optional additional JSON properties to include in the request parameters when
     making requests to OpenAI compatible APIs, such as vLLM."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    class Config:
+        """Configuration for this pydantic object."""
 
-    @model_validator(mode="before")
-    @classmethod
-    def build_extra(cls, values: Dict[str, Any]) -> Any:
+        allow_population_by_field_name = True
+
+    @root_validator(pre=True)
+    def build_extra(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         """Build extra kwargs from additional params that were passed in."""
         all_required_field_names = get_pydantic_field_names(cls)
-        values = _build_model_kwargs(values, all_required_field_names)
+        extra = values.get("model_kwargs", {})
+        values["model_kwargs"] = build_extra_kwargs(
+            extra, values, all_required_field_names
+        )
         return values
 
-    @model_validator(mode="after")
-    def validate_environment(self) -> Self:
+    @root_validator()
+    def validate_environment(cls, values: Dict) -> Dict:
         """Validate that api key and python package exists in environment."""
-        if self.n < 1:
+        if values["n"] < 1:
             raise ValueError("n must be at least 1.")
-        if self.streaming and self.n > 1:
+        if values["streaming"] and values["n"] > 1:
             raise ValueError("Cannot stream results when n > 1.")
-        if self.streaming and self.best_of > 1:
+        if values["streaming"] and values["best_of"] > 1:
             raise ValueError("Cannot stream results when best_of > 1.")
 
-        client_params: dict = {
+        openai_api_key = get_from_dict_or_env(
+            values, "openai_api_key", "OPENAI_API_KEY"
+        )
+        values["openai_api_key"] = (
+            convert_to_secret_str(openai_api_key) if openai_api_key else None
+        )
+        values["openai_api_base"] = values["openai_api_base"] or os.getenv(
+            "OPENAI_API_BASE"
+        )
+        values["openai_proxy"] = get_from_dict_or_env(
+            values, "openai_proxy", "OPENAI_PROXY", default=""
+        )
+        values["openai_organization"] = (
+            values["openai_organization"]
+            or os.getenv("OPENAI_ORG_ID")
+            or os.getenv("OPENAI_ORGANIZATION")
+        )
+
+        client_params = {
             "api_key": (
-                self.openai_api_key.get_secret_value() if self.openai_api_key else None
+                values["openai_api_key"].get_secret_value()
+                if values["openai_api_key"]
+                else None
             ),
-            "organization": self.openai_organization,
-            "base_url": self.openai_api_base,
-            "timeout": self.request_timeout,
-            "max_retries": self.max_retries,
-            "default_headers": self.default_headers,
-            "default_query": self.default_query,
+            "organization": values["openai_organization"],
+            "base_url": values["openai_api_base"],
+            "timeout": values["request_timeout"],
+            "max_retries": values["max_retries"],
+            "default_headers": values["default_headers"],
+            "default_query": values["default_query"],
         }
-        if not self.client:
-            sync_specific = {"http_client": self.http_client}
-            self.client = openai.OpenAI(**client_params, **sync_specific).completions  # type: ignore[arg-type]
-        if not self.async_client:
-            async_specific = {"http_client": self.http_async_client}
-            self.async_client = openai.AsyncOpenAI(
-                **client_params,
-                **async_specific,  # type: ignore[arg-type]
+        if not values.get("client"):
+            sync_specific = {"http_client": values["http_client"]}
+            values["client"] = openai.OpenAI(
+                **client_params, **sync_specific
+            ).completions
+        if not values.get("async_client"):
+            async_specific = {"http_client": values["http_async_client"]}
+            values["async_client"] = openai.AsyncOpenAI(
+                **client_params, **async_specific
             ).completions
 
-        return self
+        return values
 
     @property
     def _default_params(self) -> Dict[str, Any]:

@@ -6,7 +6,7 @@ import uuid
 from unittest.mock import Mock, mock_open, patch
 
 import pytest
-from pydantic import SecretStr
+from langchain_core.pydantic_v1 import SecretStr
 
 from langchain_community.tools.audio import HuggingFaceTextToSpeechModelInference
 

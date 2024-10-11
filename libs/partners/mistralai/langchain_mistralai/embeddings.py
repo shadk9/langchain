@@ -1,22 +1,20 @@
 import asyncio
 import logging
 import warnings
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 import httpx
 from langchain_core.embeddings import Embeddings
+from langchain_core.pydantic_v1 import (
+    BaseModel,
+    Field,
+    SecretStr,
+    root_validator,
+)
 from langchain_core.utils import (
     secret_from_env,
 )
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    SecretStr,
-    model_validator,
-)
 from tokenizers import Tokenizer  # type: ignore
-from typing_extensions import Self
 
 logger = logging.getLogger(__name__)
 
@@ -127,42 +125,41 @@ class MistralAIEmbeddings(BaseModel, Embeddings):
 
     model: str = "mistral-embed"
 
-    model_config = ConfigDict(
-        extra="forbid",
-        arbitrary_types_allowed=True,
-        populate_by_name=True,
-    )
+    class Config:
+        extra = "forbid"
+        arbitrary_types_allowed = True
+        allow_population_by_field_name = True
 
-    @model_validator(mode="after")
-    def validate_environment(self) -> Self:
+    @root_validator(pre=False, skip_on_failure=True)
+    def validate_environment(cls, values: Dict) -> Dict:
         """Validate configuration."""
 
-        api_key_str = self.mistral_api_key.get_secret_value()
+        api_key_str = values["mistral_api_key"].get_secret_value()
         # todo: handle retries
-        if not self.client:
-            self.client = httpx.Client(
-                base_url=self.endpoint,
+        if not values.get("client"):
+            values["client"] = httpx.Client(
+                base_url=values["endpoint"],
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                     "Authorization": f"Bearer {api_key_str}",
                 },
-                timeout=self.timeout,
+                timeout=values["timeout"],
             )
         # todo: handle retries and max_concurrency
-        if not self.async_client:
-            self.async_client = httpx.AsyncClient(
-                base_url=self.endpoint,
+        if not values.get("async_client"):
+            values["async_client"] = httpx.AsyncClient(
+                base_url=values["endpoint"],
                 headers={
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                     "Authorization": f"Bearer {api_key_str}",
                 },
-                timeout=self.timeout,
+                timeout=values["timeout"],
             )
-        if self.tokenizer is None:
+        if values["tokenizer"] is None:
             try:
-                self.tokenizer = Tokenizer.from_pretrained(
+                values["tokenizer"] = Tokenizer.from_pretrained(
                     "mistralai/Mixtral-8x7B-v0.1"
                 )
             except IOError:  # huggingface_hub GatedRepoError
@@ -172,8 +169,8 @@ class MistralAIEmbeddings(BaseModel, Embeddings):
                     "HF_TOKEN environment variable to download the real tokenizer. "
                     "Falling back to a dummy tokenizer that uses `len()`."
                 )
-                self.tokenizer = DummyTokenizer()
-        return self
+                values["tokenizer"] = DummyTokenizer()
+        return values
 
     def _get_batches(self, texts: List[str]) -> Iterable[List[str]]:
         """Split a list of texts into batches of less than 16k tokens

@@ -18,9 +18,8 @@ from langchain_core.callbacks import (
 )
 from langchain_core.language_models import BaseLLM, LangSmithParams
 from langchain_core.outputs import GenerationChunk, LLMResult
+from langchain_core.pydantic_v1 import Field, root_validator
 from ollama import AsyncClient, Client, Options
-from pydantic import PrivateAttr, model_validator
-from typing_extensions import Self
 
 
 class OllamaLLM(BaseLLM):
@@ -116,12 +115,12 @@ class OllamaLLM(BaseLLM):
     For a full list of the params, see [this link](https://pydoc.dev/httpx/latest/httpx.Client.html)
     """
 
-    _client: Client = PrivateAttr(default=None)
+    _client: Client = Field(default=None)
     """
     The client to use for making requests.
     """
 
-    _async_client: AsyncClient = PrivateAttr(default=None)
+    _async_client: AsyncClient = Field(default=None)
     """
     The async client to use for making requests.
     """
@@ -165,13 +164,14 @@ class OllamaLLM(BaseLLM):
             params["ls_max_tokens"] = max_tokens
         return params
 
-    @model_validator(mode="after")
-    def _set_clients(self) -> Self:
+    @root_validator(pre=False, skip_on_failure=True)
+    def _set_clients(cls, values: dict) -> dict:
         """Set clients to use for ollama."""
-        client_kwargs = self.client_kwargs or {}
-        self._client = Client(host=self.base_url, **client_kwargs)
-        self._async_client = AsyncClient(host=self.base_url, **client_kwargs)
-        return self
+        values["_client"] = Client(host=values["base_url"], **values["client_kwargs"])
+        values["_async_client"] = AsyncClient(
+            host=values["base_url"], **values["client_kwargs"]
+        )
+        return values
 
     async def _acreate_generate_stream(
         self,

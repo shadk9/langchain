@@ -1,4 +1,4 @@
-from pydantic import SecretStr
+from langchain_core.pydantic_v1 import SecretStr
 from pytest import CaptureFixture
 
 from langchain_community.llms.stochasticai import StochasticAI

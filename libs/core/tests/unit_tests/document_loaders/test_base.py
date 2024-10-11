@@ -1,6 +1,6 @@
 """Test Base Schema of documents."""
 
-from collections.abc import Iterator
+from typing import Iterator, List
 
 import pytest
 
@@ -33,7 +33,7 @@ def test_base_blob_parser() -> None:
 
 def test_default_lazy_load() -> None:
     class FakeLoader(BaseLoader):
-        def load(self) -> list[Document]:
+        def load(self) -> List[Document]:
             return [
                 Document(page_content="foo"),
                 Document(page_content="bar"),

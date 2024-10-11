@@ -5,14 +5,11 @@ from typing import Any, Callable, Dict, Literal, Type, cast
 
 import pytest
 from anthropic.types import Message, TextBlock, Usage
-from anthropic.types.beta.prompt_caching import (
-    PromptCachingBetaMessage,
-    PromptCachingBetaUsage,
-)
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.pydantic_v1 import BaseModel, Field, SecretStr
 from langchain_core.runnables import RunnableBinding
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field, SecretStr
 from pytest import CaptureFixture, MonkeyPatch
 
 from langchain_anthropic import ChatAnthropic
@@ -61,12 +58,9 @@ def test_anthropic_model_kwargs() -> None:
 
 
 @pytest.mark.requires("anthropic")
-def test_anthropic_fields_in_model_kwargs() -> None:
-    """Test that for backwards compatibility fields can be passed in as model_kwargs."""
-    llm = ChatAnthropic(model="foo", model_kwargs={"max_tokens_to_sample": 5})  # type: ignore[call-arg]
-    assert llm.max_tokens == 5
-    llm = ChatAnthropic(model="foo", model_kwargs={"max_tokens": 5})  # type: ignore[call-arg]
-    assert llm.max_tokens == 5
+def test_anthropic_invalid_model_kwargs() -> None:
+    with pytest.raises(ValueError):
+        ChatAnthropic(model="foo", model_kwargs={"max_tokens_to_sample": 5})  # type: ignore[call-arg]
 
 
 @pytest.mark.requires("anthropic")
@@ -95,49 +89,30 @@ def test__format_output() -> None:
         usage=Usage(input_tokens=2, output_tokens=1),
         type="message",
     )
-    expected = AIMessage(  # type: ignore[misc]
-        "bar",
-        usage_metadata={
-            "input_tokens": 2,
-            "output_tokens": 1,
-            "total_tokens": 3,
-            "input_token_details": {},
+    expected = ChatResult(
+        generations=[
+            ChatGeneration(
+                message=AIMessage(  # type: ignore[misc]
+                    "bar",
+                    usage_metadata={
+                        "input_tokens": 2,
+                        "output_tokens": 1,
+                        "total_tokens": 3,
+                    },
+                )
+            ),
+        ],
+        llm_output={
+            "id": "foo",
+            "model": "baz",
+            "stop_reason": None,
+            "stop_sequence": None,
+            "usage": {"input_tokens": 2, "output_tokens": 1},
         },
     )
     llm = ChatAnthropic(model="test", anthropic_api_key="test")  # type: ignore[call-arg, call-arg]
     actual = llm._format_output(anthropic_msg)
-    assert actual.generations[0].message == expected
-
-
-def test__format_output_cached() -> None:
-    anthropic_msg = PromptCachingBetaMessage(
-        id="foo",
-        content=[TextBlock(type="text", text="bar")],
-        model="baz",
-        role="assistant",
-        stop_reason=None,
-        stop_sequence=None,
-        usage=PromptCachingBetaUsage(
-            input_tokens=2,
-            output_tokens=1,
-            cache_creation_input_tokens=3,
-            cache_read_input_tokens=4,
-        ),
-        type="message",
-    )
-    expected = AIMessage(  # type: ignore[misc]
-        "bar",
-        usage_metadata={
-            "input_tokens": 9,
-            "output_tokens": 1,
-            "total_tokens": 10,
-            "input_token_details": {"cache_creation": 3, "cache_read": 4},
-        },
-    )
-
-    llm = ChatAnthropic(model="test", anthropic_api_key="test")  # type: ignore[call-arg, call-arg]
-    actual = llm._format_output(anthropic_msg)
-    assert actual.generations[0].message == expected
+    assert expected == actual
 
 
 def test__merge_messages() -> None:
@@ -162,13 +137,6 @@ def test__merge_messages() -> None:
                     "text": None,
                     "name": "blah",
                 },
-                {
-                    "tool_input": {"a": "c"},
-                    "type": "tool_use",
-                    "id": "3",
-                    "text": None,
-                    "name": "blah",
-                },
             ]
         ),
         ToolMessage("buz output", tool_call_id="1", status="error"),  # type: ignore[misc]
@@ -185,7 +153,6 @@ def test__merge_messages() -> None:
             ],
             tool_call_id="2",
         ),  # type: ignore[misc]
-        ToolMessage([], tool_call_id="3"),  # type: ignore[misc]
         HumanMessage("next thing"),  # type: ignore[misc]
     ]
     expected = [
@@ -206,13 +173,6 @@ def test__merge_messages() -> None:
                     "tool_input": {"a": "c"},
                     "type": "tool_use",
                     "id": "2",
-                    "text": None,
-                    "name": "blah",
-                },
-                {
-                    "tool_input": {"a": "c"},
-                    "type": "tool_use",
-                    "id": "3",
                     "text": None,
                     "name": "blah",
                 },
@@ -239,12 +199,6 @@ def test__merge_messages() -> None:
                         },
                     ],
                     "tool_use_id": "2",
-                    "is_error": False,
-                },
-                {
-                    "type": "tool_result",
-                    "content": [],
-                    "tool_use_id": "3",
                     "is_error": False,
                 },
                 {"type": "text", "text": "next thing"},
@@ -412,36 +366,15 @@ def test_convert_to_anthropic_tool(
 def test__format_messages_with_tool_calls() -> None:
     system = SystemMessage("fuzz")  # type: ignore[misc]
     human = HumanMessage("foo")  # type: ignore[misc]
-    ai = AIMessage(
-        "",  # with empty string
+    ai = AIMessage(  # type: ignore[misc]
+        "",
         tool_calls=[{"name": "bar", "id": "1", "args": {"baz": "buzz"}}],
     )
-    ai2 = AIMessage(
-        [],  # with empty list
-        tool_calls=[{"name": "bar", "id": "2", "args": {"baz": "buzz"}}],
-    )
-    tool = ToolMessage(
+    tool = ToolMessage(  # type: ignore[misc]
         "blurb",
         tool_call_id="1",
     )
-    tool_image_url = ToolMessage(
-        [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,...."}}],
-        tool_call_id="2",
-    )
-    tool_image = ToolMessage(
-        [
-            {
-                "type": "image",
-                "source": {
-                    "data": "....",
-                    "type": "base64",
-                    "media_type": "image/jpeg",
-                },
-            }
-        ],
-        tool_call_id="3",
-    )
-    messages = [system, human, ai, tool, ai2, tool_image_url, tool_image]
+    messages = [system, human, ai, tool]
     expected = (
         "fuzz",
         [
@@ -466,52 +399,6 @@ def test__format_messages_with_tool_calls() -> None:
                         "tool_use_id": "1",
                         "is_error": False,
                     }
-                ],
-            },
-            {
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "tool_use",
-                        "name": "bar",
-                        "id": "2",
-                        "input": {"baz": "buzz"},
-                    }
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "data": "....",
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                },
-                            }
-                        ],
-                        "tool_use_id": "2",
-                        "is_error": False,
-                    },
-                    {
-                        "type": "tool_result",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "data": "....",
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                },
-                            }
-                        ],
-                        "tool_use_id": "3",
-                        "is_error": False,
-                    },
                 ],
             },
         ],
@@ -567,6 +454,8 @@ def test__format_messages_with_str_content_and_tool_calls() -> None:
 def test__format_messages_with_list_content_and_tool_calls() -> None:
     system = SystemMessage("fuzz")  # type: ignore[misc]
     human = HumanMessage("foo")  # type: ignore[misc]
+    # If content and tool_calls are specified and content is a list, then content is
+    # preferred.
     ai = AIMessage(  # type: ignore[misc]
         [{"type": "text", "text": "thought"}],
         tool_calls=[{"name": "bar", "id": "1", "args": {"baz": "buzz"}}],
@@ -582,15 +471,7 @@ def test__format_messages_with_list_content_and_tool_calls() -> None:
             {"role": "user", "content": "foo"},
             {
                 "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "thought"},
-                    {
-                        "type": "tool_use",
-                        "name": "bar",
-                        "id": "1",
-                        "input": {"baz": "buzz"},
-                    },
-                ],
+                "content": [{"type": "text", "text": "thought"}],
             },
             {
                 "role": "user",

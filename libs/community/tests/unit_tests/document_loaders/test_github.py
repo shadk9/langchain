@@ -171,11 +171,10 @@ def test_github_file_content_get_file_paths(mocker: MockerFixture) -> None:
     assert files[0]["path"] == "readme.md"
 
     # case2: didn't add file_filter
-    loader = GithubFileLoader(
+    loader = GithubFileLoader(  # type: ignore[call-arg]
         repo="shufanhao/langchain",
         access_token="access_token",
         github_api_url="https://github.com",
-        file_filter=None,
     )
 
     # Call the load method
@@ -221,11 +220,10 @@ def test_github_file_content_loader(mocker: MockerFixture) -> None:
     mocker.patch("requests.get", side_effect=[file_path_res, file_content_res])
 
     # case1: file_extension=".md"
-    loader = GithubFileLoader(
+    loader = GithubFileLoader(  # type: ignore[call-arg]
         repo="shufanhao/langchain",
         access_token="access_token",
         github_api_url="https://github.com",
-        file_filter=None,
     )
 
     # Call the load method

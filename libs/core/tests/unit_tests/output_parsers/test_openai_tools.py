@@ -1,8 +1,6 @@
-from collections.abc import AsyncIterator, Iterator
-from typing import Any
+from typing import Any, AsyncIterator, Iterator, List
 
 import pytest
-from pydantic import BaseModel, Field
 
 from langchain_core.messages import (
     AIMessage,
@@ -16,6 +14,7 @@ from langchain_core.output_parsers.openai_tools import (
     PydanticToolsParser,
 )
 from langchain_core.outputs import ChatGeneration
+from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.utils.pydantic import PYDANTIC_MAJOR_VERSION
 
 STREAMED_MESSAGES: list = [
@@ -484,7 +483,7 @@ class Person(BaseModel):
 class NameCollector(BaseModel):
     """record names of all people mentioned"""
 
-    names: list[str] = Field(..., description="all names mentioned")
+    names: List[str] = Field(..., description="all names mentioned")
     person: Person = Field(..., description="info about the main subject")
 
 
@@ -532,7 +531,7 @@ async def test_partial_pydantic_output_parser_async() -> None:
 @pytest.mark.skipif(PYDANTIC_MAJOR_VERSION != 2, reason="This test is for pydantic 2")
 def test_parse_with_different_pydantic_2_v1() -> None:
     """Test with pydantic.v1.BaseModel from pydantic 2."""
-    import pydantic
+    import pydantic  # pydantic: ignore
 
     class Forecast(pydantic.v1.BaseModel):
         temperature: int
@@ -567,7 +566,7 @@ def test_parse_with_different_pydantic_2_v1() -> None:
 @pytest.mark.skipif(PYDANTIC_MAJOR_VERSION != 2, reason="This test is for pydantic 2")
 def test_parse_with_different_pydantic_2_proper() -> None:
     """Test with pydantic.BaseModel from pydantic 2."""
-    import pydantic
+    import pydantic  # pydantic: ignore
 
     class Forecast(pydantic.BaseModel):
         temperature: int
@@ -602,7 +601,7 @@ def test_parse_with_different_pydantic_2_proper() -> None:
 @pytest.mark.skipif(PYDANTIC_MAJOR_VERSION != 1, reason="This test is for pydantic 1")
 def test_parse_with_different_pydantic_1_proper() -> None:
     """Test with pydantic.BaseModel from pydantic 1."""
-    import pydantic
+    import pydantic  # pydantic: ignore
 
     class Forecast(pydantic.BaseModel):
         temperature: int

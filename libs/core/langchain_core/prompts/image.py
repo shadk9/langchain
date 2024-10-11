@@ -1,9 +1,8 @@
-from typing import Any
-
-from pydantic import Field
+from typing import Any, List
 
 from langchain_core.prompt_values import ImagePromptValue, ImageURL, PromptValue
 from langchain_core.prompts.base import BasePromptTemplate
+from langchain_core.pydantic_v1 import Field
 from langchain_core.runnables import run_in_executor
 from langchain_core.utils import image as image_utils
 
@@ -18,14 +17,13 @@ class ImagePromptTemplate(BasePromptTemplate[ImageURL]):
         if "input_variables" not in kwargs:
             kwargs["input_variables"] = []
 
-        overlap = set(kwargs["input_variables"]) & {"url", "path", "detail"}
+        overlap = set(kwargs["input_variables"]) & set(("url", "path", "detail"))
         if overlap:
-            msg = (
+            raise ValueError(
                 "input_variables for the image template cannot contain"
                 " any of 'url', 'path', or 'detail'."
                 f" Found: {overlap}"
             )
-            raise ValueError(msg)
         super().__init__(**kwargs)
 
     @property
@@ -34,7 +32,7 @@ class ImagePromptTemplate(BasePromptTemplate[ImageURL]):
         return "image-prompt"
 
     @classmethod
-    def get_lc_namespace(cls) -> list[str]:
+    def get_lc_namespace(cls) -> List[str]:
         """Get the namespace of the langchain object."""
         return ["langchain", "prompts", "image"]
 
@@ -92,16 +90,13 @@ class ImagePromptTemplate(BasePromptTemplate[ImageURL]):
         path = kwargs.get("path") or formatted.get("path")
         detail = kwargs.get("detail") or formatted.get("detail")
         if not url and not path:
-            msg = "Must provide either url or path."
-            raise ValueError(msg)
+            raise ValueError("Must provide either url or path.")
         if not url:
             if not isinstance(path, str):
-                msg = "path must be a string."
-                raise ValueError(msg)
+                raise ValueError("path must be a string.")
             url = image_utils.image_to_data_url(path)
         if not isinstance(url, str):
-            msg = "url must be a string."
-            raise ValueError(msg)
+            raise ValueError("url must be a string.")
         output: ImageURL = {"url": url}
         if detail:
             # Don't check literal values here: let the API check them
@@ -132,4 +127,4 @@ class ImagePromptTemplate(BasePromptTemplate[ImageURL]):
         Returns:
             A pretty representation of the prompt.
         """
-        raise NotImplementedError
+        raise NotImplementedError()

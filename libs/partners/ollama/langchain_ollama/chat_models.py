@@ -35,12 +35,11 @@ from langchain_core.messages import (
 from langchain_core.messages.ai import UsageMetadata
 from langchain_core.messages.tool import tool_call
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+from langchain_core.pydantic_v1 import Field, root_validator
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 from ollama import AsyncClient, Client, Message, Options
-from pydantic import PrivateAttr, model_validator
-from typing_extensions import Self
 
 
 def _get_usage_metadata_from_generation_info(
@@ -92,9 +91,7 @@ def _lc_tool_call_to_openai_tool_call(tool_call: ToolCall) -> dict:
 class ChatOllama(BaseChatModel):
     """Ollama chat model integration.
 
-    .. dropdown:: Setup
-        :open:
-
+    Setup:
         Install ``langchain-ollama`` and download any models you want to use from ollama.
 
         .. code-block:: bash
@@ -228,7 +225,7 @@ class ChatOllama(BaseChatModel):
         .. code-block:: python
 
             from langchain_ollama import ChatOllama
-            from pydantic import BaseModel, Field
+            from langchain_core.pydantic_v1 import BaseModel, Field
 
             class Multiply(BaseModel):
                 a: int = Field(..., description="First integer")
@@ -331,12 +328,12 @@ class ChatOllama(BaseChatModel):
     For a full list of the params, see [this link](https://pydoc.dev/httpx/latest/httpx.Client.html)
     """
 
-    _client: Client = PrivateAttr(default=None)
+    _client: Client = Field(default=None)
     """
     The client to use for making requests.
     """
 
-    _async_client: AsyncClient = PrivateAttr(default=None)
+    _async_client: AsyncClient = Field(default=None)
     """
     The async client to use for making requests.
     """
@@ -367,13 +364,14 @@ class ChatOllama(BaseChatModel):
             "keep_alive": self.keep_alive,
         }
 
-    @model_validator(mode="after")
-    def _set_clients(self) -> Self:
+    @root_validator(pre=False, skip_on_failure=True)
+    def _set_clients(cls, values: dict) -> dict:
         """Set clients to use for ollama."""
-        client_kwargs = self.client_kwargs or {}
-        self._client = Client(host=self.base_url, **client_kwargs)
-        self._async_client = AsyncClient(host=self.base_url, **client_kwargs)
-        return self
+        values["_client"] = Client(host=values["base_url"], **values["client_kwargs"])
+        values["_async_client"] = AsyncClient(
+            host=values["base_url"], **values["client_kwargs"]
+        )
+        return values
 
     def _convert_messages_to_ollama_messages(
         self, messages: List[BaseMessage]

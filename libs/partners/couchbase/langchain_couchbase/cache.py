@@ -9,7 +9,6 @@ are duplicated in this utility from modules:
 import hashlib
 import json
 import logging
-from datetime import timedelta
 from typing import Any, Dict, Optional, Union
 
 from couchbase.cluster import Cluster
@@ -88,16 +87,6 @@ def _loads_generations(generations_str: str) -> Union[RETURN_VAL_TYPE, None]:
         return None
 
 
-def _validate_ttl(ttl: Optional[timedelta]) -> None:
-    """Validate the time to live"""
-    if not isinstance(ttl, timedelta):
-        raise ValueError(f"ttl should be of type timedelta but was {type(ttl)}.")
-    if ttl <= timedelta(seconds=0):
-        raise ValueError(
-            f"ttl must be greater than 0 but was {ttl.total_seconds()} seconds."
-        )
-
-
 class CouchbaseCache(BaseCache):
     """Couchbase LLM Cache
     LLM Cache that uses Couchbase as the backend
@@ -151,7 +140,6 @@ class CouchbaseCache(BaseCache):
         bucket_name: str,
         scope_name: str,
         collection_name: str,
-        ttl: Optional[timedelta] = None,
         **kwargs: Dict[str, Any],
     ) -> None:
         """Initialize the Couchbase LLM Cache
@@ -161,8 +149,6 @@ class CouchbaseCache(BaseCache):
             scope_name (str): name of the scope in bucket to store documents in.
             collection_name (str): name of the collection in the scope to store
                 documents in.
-            ttl (Optional[timedelta]): TTL or time for the document to live in the cache
-                After this time, the document will get deleted from the cache.
         """
         if not isinstance(cluster, Cluster):
             raise ValueError(
@@ -175,8 +161,6 @@ class CouchbaseCache(BaseCache):
         self._bucket_name = bucket_name
         self._scope_name = scope_name
         self._collection_name = collection_name
-
-        self._ttl = None
 
         # Check if the bucket exists
         if not self._check_bucket_exists():
@@ -201,11 +185,6 @@ class CouchbaseCache(BaseCache):
         except Exception as e:
             raise e
 
-        # Check if the time to live is provided and valid
-        if ttl is not None:
-            _validate_ttl(ttl)
-            self._ttl = ttl
-
     def lookup(self, prompt: str, llm_string: str) -> Optional[RETURN_VAL_TYPE]:
         """Look up from cache based on prompt and llm_string."""
         try:
@@ -227,16 +206,10 @@ class CouchbaseCache(BaseCache):
             self.LLM: llm_string,
             self.RETURN_VAL: _dumps_generations(return_val),
         }
-        document_key = self._generate_key(prompt, llm_string)
         try:
-            if self._ttl:
-                self._collection.upsert(
-                    key=document_key,
-                    value=doc,
-                    expiry=self._ttl,
-                )
-            else:
-                self._collection.upsert(key=document_key, value=doc)
+            self._collection.upsert(
+                key=self._generate_key(prompt, llm_string), value=doc
+            )
         except Exception:
             logger.error("Error updating cache")
 
@@ -269,7 +242,6 @@ class CouchbaseSemanticCache(BaseCache, CouchbaseVectorStore):
         collection_name: str,
         index_name: str,
         score_threshold: Optional[float] = None,
-        ttl: Optional[timedelta] = None,
     ) -> None:
         """Initialize the Couchbase LLM Cache
         Args:
@@ -281,8 +253,6 @@ class CouchbaseSemanticCache(BaseCache, CouchbaseVectorStore):
                 documents in.
             index_name (str): name of the Search index to use.
             score_threshold (float): score threshold to use for filtering results.
-            ttl (Optional[timedelta]): TTL or time for the document to live in the cache
-                After this time, the document will get deleted from the cache.
         """
         if not isinstance(cluster, Cluster):
             raise ValueError(
@@ -295,7 +265,6 @@ class CouchbaseSemanticCache(BaseCache, CouchbaseVectorStore):
         self._bucket_name = bucket_name
         self._scope_name = scope_name
         self._collection_name = collection_name
-        self._ttl = None
 
         # Check if the bucket exists
         if not self._check_bucket_exists():
@@ -321,10 +290,6 @@ class CouchbaseSemanticCache(BaseCache, CouchbaseVectorStore):
             raise e
 
         self.score_threshold = score_threshold
-
-        if ttl is not None:
-            _validate_ttl(ttl)
-            self._ttl = ttl
 
         # Initialize the vector store
         super().__init__(
@@ -369,7 +334,6 @@ class CouchbaseSemanticCache(BaseCache, CouchbaseVectorStore):
                         self.RETURN_VAL: _dumps_generations(return_val),
                     }
                 ],
-                ttl=self._ttl,
             )
         except Exception:
             logger.error("Error updating cache")

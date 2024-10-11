@@ -3,6 +3,7 @@ import glob
 import importlib
 import subprocess
 from pathlib import Path
+from typing import Tuple
 
 
 def test_importable_all() -> None:
@@ -17,7 +18,7 @@ def test_importable_all() -> None:
             getattr(module, cls_)
 
 
-def try_to_import(module_name: str) -> tuple[int, str]:
+def try_to_import(module_name: str) -> Tuple[int, str]:
     """Try to import a module via subprocess."""
     module = importlib.import_module("langchain_core." + module_name)
     all_ = getattr(module, "__all__", [])
@@ -52,5 +53,4 @@ def test_importable_all_via_subprocess() -> None:
             result = future.result()  # Will raise an exception if the callable raised
             code, module_name = result
             if code != 0:
-                msg = f"Failed to import {module_name}."
-                raise ValueError(msg)
+                raise ValueError(f"Failed to import {module_name}.")

@@ -1,8 +1,7 @@
-import asyncio
 import base64
 import re
 from dataclasses import asdict
-from typing import Optional
+from typing import Dict, List, Optional
 
 from langchain_core.runnables.graph import (
     CurveStyle,
@@ -12,12 +11,10 @@ from langchain_core.runnables.graph import (
     NodeStyles,
 )
 
-MARKDOWN_SPECIAL_CHARS = "*_`"
-
 
 def draw_mermaid(
-    nodes: dict[str, Node],
-    edges: list[Edge],
+    nodes: Dict[str, Node],
+    edges: List[Edge],
     *,
     first_node: Optional[str] = None,
     last_node: Optional[str] = None,
@@ -61,19 +58,13 @@ def draw_mermaid(
         default_class_label = "default"
         format_dict = {default_class_label: "{0}({1})"}
         if first_node is not None:
-            format_dict[first_node] = "{0}([{1}]):::first"
+            format_dict[first_node] = "{0}([{0}]):::first"
         if last_node is not None:
-            format_dict[last_node] = "{0}([{1}]):::last"
+            format_dict[last_node] = "{0}([{0}]):::last"
 
         # Add nodes to the graph
         for key, node in nodes.items():
-            node_name = node.name.split(":")[-1]
-            label = (
-                f"<p>{node_name}</p>"
-                if node_name.startswith(tuple(MARKDOWN_SPECIAL_CHARS))
-                and node_name.endswith(tuple(MARKDOWN_SPECIAL_CHARS))
-                else node_name
-            )
+            label = node.name.split(":")[-1]
             if node.metadata:
                 label = (
                     f"{label}<hr/><small><em>"
@@ -88,7 +79,7 @@ def draw_mermaid(
             mermaid_graph += f"\t{node_label}\n"
 
     # Group edges by their common prefixes
-    edge_groups: dict[str, list[Edge]] = {}
+    edge_groups: Dict[str, List[Edge]] = {}
     for edge in edges:
         src_parts = edge.source.split(":")
         tgt_parts = edge.target.split(":")
@@ -99,18 +90,17 @@ def draw_mermaid(
 
     seen_subgraphs = set()
 
-    def add_subgraph(edges: list[Edge], prefix: str) -> None:
+    def add_subgraph(edges: List[Edge], prefix: str) -> None:
         nonlocal mermaid_graph
         self_loop = len(edges) == 1 and edges[0].source == edges[0].target
         if prefix and not self_loop:
             subgraph = prefix.split(":")[-1]
             if subgraph in seen_subgraphs:
-                msg = (
+                raise ValueError(
                     f"Found duplicate subgraph '{subgraph}' -- this likely means that "
                     "you're reusing a subgraph node with the same name. "
                     "Please adjust your graph to have subgraph nodes with unique names."
                 )
-                raise ValueError(msg)
 
             seen_subgraphs.add(subgraph)
             mermaid_graph += f"\tsubgraph {subgraph}\n"
@@ -129,11 +119,14 @@ def draw_mermaid(
                         for i in range(0, len(words), wrap_label_n_words)
                     )
                 if edge.conditional:
-                    edge_label = f" -. &nbsp;{edge_data}&nbsp; .-> "
+                    edge_label = f" -. &nbsp{edge_data}&nbsp .-> "
                 else:
-                    edge_label = f" -- &nbsp;{edge_data}&nbsp; --> "
+                    edge_label = f" -- &nbsp{edge_data}&nbsp --> "
             else:
-                edge_label = " -.-> " if edge.conditional else " --> "
+                if edge.conditional:
+                    edge_label = " -.-> "
+                else:
+                    edge_label = " --> "
 
             mermaid_graph += (
                 f"\t{_escape_node_label(source)}{edge_label}"
@@ -141,7 +134,7 @@ def draw_mermaid(
             )
 
         # Recursively add nested subgraphs
-        for nested_prefix in edge_groups:
+        for nested_prefix in edge_groups.keys():
             if not nested_prefix.startswith(prefix + ":") or nested_prefix == prefix:
                 continue
             add_subgraph(edge_groups[nested_prefix], nested_prefix)
@@ -153,7 +146,7 @@ def draw_mermaid(
     add_subgraph(edge_groups.get("", []), "")
 
     # Add remaining subgraphs
-    for prefix in edge_groups:
+    for prefix in edge_groups.keys():
         if ":" in prefix or prefix == "":
             continue
         add_subgraph(edge_groups[prefix], prefix)
@@ -216,11 +209,10 @@ def draw_mermaid_png(
         )
     else:
         supported_methods = ", ".join([m.value for m in MermaidDrawMethod])
-        msg = (
+        raise ValueError(
             f"Invalid draw method: {draw_method}. "
             f"Supported draw methods are: {supported_methods}"
         )
-        raise ValueError(msg)
 
     return img_bytes
 
@@ -236,8 +228,9 @@ async def _render_mermaid_using_pyppeteer(
     try:
         from pyppeteer import launch  # type: ignore[import]
     except ImportError as e:
-        msg = "Install Pyppeteer to use the Pyppeteer method: `pip install pyppeteer`."
-        raise ImportError(msg) from e
+        raise ImportError(
+            "Install Pyppeteer to use the Pyppeteer method: `pip install pyppeteer`."
+        ) from e
 
     browser = await launch()
     page = await browser.newPage()
@@ -290,14 +283,9 @@ async def _render_mermaid_using_pyppeteer(
     img_bytes = await page.screenshot({"fullPage": False})
     await browser.close()
 
-    def write_to_file(path: str, bytes: bytes) -> None:
-        with open(path, "wb") as file:
-            file.write(bytes)
-
     if output_file_path is not None:
-        await asyncio.get_event_loop().run_in_executor(
-            None, write_to_file, output_file_path, img_bytes
-        )
+        with open(output_file_path, "wb") as file:
+            file.write(img_bytes)
 
     return img_bytes
 
@@ -311,11 +299,10 @@ def _render_mermaid_using_api(
     try:
         import requests  # type: ignore[import]
     except ImportError as e:
-        msg = (
+        raise ImportError(
             "Install the `requests` module to use the Mermaid.INK API: "
             "`pip install requests`."
-        )
-        raise ImportError(msg) from e
+        ) from e
 
     # Use Mermaid API to render the image
     mermaid_syntax_encoded = base64.b64encode(mermaid_syntax.encode("utf8")).decode(
@@ -340,8 +327,7 @@ def _render_mermaid_using_api(
 
         return img_bytes
     else:
-        msg = (
+        raise ValueError(
             f"Failed to render the graph using the Mermaid.INK API. "
             f"Status code: {response.status_code}."
         )
-        raise ValueError(msg)

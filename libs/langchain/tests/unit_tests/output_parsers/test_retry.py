@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 import pytest
 from langchain_core.prompt_values import PromptValue, StringPromptValue
 from langchain_core.runnables import Runnable, RunnableLambda, RunnablePassthrough
+from pytest_mock import MockerFixture
 
 from langchain.output_parsers.boolean import BooleanOutputParser
 from langchain.output_parsers.datetime import DatetimeOutputParser
@@ -15,6 +16,7 @@ from langchain.output_parsers.retry import (
     RetryOutputParser,
     RetryWithErrorOutputParser,
 )
+from langchain.pydantic_v1 import Extra
 
 T = TypeVar("T")
 
@@ -220,13 +222,25 @@ def test_retry_output_parser_parse_with_prompt_with_retry_chain(
     base_parser: BaseOutputParser[T],
     retry_chain: Runnable[Dict[str, Any], str],
     expected: T,
+    mocker: MockerFixture,
 ) -> None:
+    # preparation
+    # NOTE: Extra.allow is necessary in order to use spy and mock
+    retry_chain.Config.extra = Extra.allow  # type: ignore
+    invoke_spy = mocker.spy(retry_chain, "invoke")
+    # test
     parser = RetryOutputParser(
         parser=base_parser,
         retry_chain=retry_chain,
         legacy=False,
     )
     assert parser.parse_with_prompt(input, prompt) == expected
+    invoke_spy.assert_called_once_with(
+        dict(
+            prompt=prompt.to_string(),
+            completion=input,
+        )
+    )
 
 
 @pytest.mark.parametrize(
@@ -248,7 +262,12 @@ async def test_retry_output_parser_aparse_with_prompt_with_retry_chain(
     base_parser: BaseOutputParser[T],
     retry_chain: Runnable[Dict[str, Any], str],
     expected: T,
+    mocker: MockerFixture,
 ) -> None:
+    # preparation
+    # NOTE: Extra.allow is necessary in order to use spy and mock
+    retry_chain.Config.extra = Extra.allow  # type: ignore
+    ainvoke_spy = mocker.spy(retry_chain, "ainvoke")
     # test
     parser = RetryOutputParser(
         parser=base_parser,
@@ -256,6 +275,12 @@ async def test_retry_output_parser_aparse_with_prompt_with_retry_chain(
         legacy=False,
     )
     assert (await parser.aparse_with_prompt(input, prompt)) == expected
+    ainvoke_spy.assert_called_once_with(
+        dict(
+            prompt=prompt.to_string(),
+            completion=input,
+        )
+    )
 
 
 @pytest.mark.parametrize(
@@ -277,7 +302,12 @@ def test_retry_with_error_output_parser_parse_with_prompt_with_retry_chain(
     base_parser: BaseOutputParser[T],
     retry_chain: Runnable[Dict[str, Any], str],
     expected: T,
+    mocker: MockerFixture,
 ) -> None:
+    # preparation
+    # NOTE: Extra.allow is necessary in order to use spy and mock
+    retry_chain.Config.extra = Extra.allow  # type: ignore
+    invoke_spy = mocker.spy(retry_chain, "invoke")
     # test
     parser = RetryWithErrorOutputParser(
         parser=base_parser,
@@ -285,6 +315,13 @@ def test_retry_with_error_output_parser_parse_with_prompt_with_retry_chain(
         legacy=False,
     )
     assert parser.parse_with_prompt(input, prompt) == expected
+    invoke_spy.assert_called_once_with(
+        dict(
+            prompt=prompt.to_string(),
+            completion=input,
+            error=repr(_extract_exception(base_parser.parse, input)),
+        )
+    )
 
 
 @pytest.mark.parametrize(
@@ -306,13 +343,26 @@ async def test_retry_with_error_output_parser_aparse_with_prompt_with_retry_chai
     base_parser: BaseOutputParser[T],
     retry_chain: Runnable[Dict[str, Any], str],
     expected: T,
+    mocker: MockerFixture,
 ) -> None:
+    # preparation
+    # NOTE: Extra.allow is necessary in order to use spy and mock
+    retry_chain.Config.extra = Extra.allow  # type: ignore
+    ainvoke_spy = mocker.spy(retry_chain, "ainvoke")
+    # test
     parser = RetryWithErrorOutputParser(
         parser=base_parser,
         retry_chain=retry_chain,
         legacy=False,
     )
     assert (await parser.aparse_with_prompt(input, prompt)) == expected
+    ainvoke_spy.assert_called_once_with(
+        dict(
+            prompt=prompt.to_string(),
+            completion=input,
+            error=repr(_extract_exception(base_parser.parse, input)),
+        )
+    )
 
 
 def _extract_exception(

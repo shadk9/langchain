@@ -7,7 +7,7 @@ from typing import (
 )
 
 from langchain_core._api import deprecated
-from pydantic import PrivateAttr
+from langchain_core.pydantic_v1 import Field
 
 from langchain_anthropic.chat_models import ChatAnthropic
 
@@ -156,4 +156,4 @@ def _xml_to_tool_calls(elem: Any, tools: List[Dict]) -> List[Dict[str, Any]]:
 class ChatAnthropicTools(ChatAnthropic):
     """Chat model for interacting with Anthropic functions."""
 
-    _xmllib: Any = PrivateAttr(default=None)
+    _xmllib: Any = Field(default=None)

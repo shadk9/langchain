@@ -1,11 +1,9 @@
 import json
-import os
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from langchain_core.embeddings import Embeddings
-from langchain_core.utils import from_env
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from typing_extensions import Self
+from langchain_core.pydantic_v1 import BaseModel, root_validator
+from langchain_core.utils import get_from_dict_or_env
 
 DEFAULT_MODEL = "sentence-transformers/all-mpnet-base-v2"
 VALID_TASKS = ("feature-extraction",)
@@ -30,8 +28,8 @@ class HuggingFaceEndpointEmbeddings(BaseModel, Embeddings):
             )
     """
 
-    client: Any = None  #: :meta private:
-    async_client: Any = None  #: :meta private:
+    client: Any  #: :meta private:
+    async_client: Any  #: :meta private:
     model: Optional[str] = None
     """Model name to use."""
     repo_id: Optional[str] = None
@@ -41,20 +39,22 @@ class HuggingFaceEndpointEmbeddings(BaseModel, Embeddings):
     model_kwargs: Optional[dict] = None
     """Keyword arguments to pass to the model."""
 
-    huggingfacehub_api_token: Optional[str] = Field(
-        default_factory=from_env("HUGGINGFACEHUB_API_TOKEN", default=None)
-    )
+    huggingfacehub_api_token: Optional[str] = None
 
-    model_config = ConfigDict(
-        extra="forbid",
-        protected_namespaces=(),
-    )
+    class Config:
+        """Configuration for this pydantic object."""
 
-    @model_validator(mode="after")
-    def validate_environment(self) -> Self:
+        extra = "forbid"
+
+    @root_validator(pre=False, skip_on_failure=True)
+    def validate_environment(cls, values: Dict) -> Dict:
         """Validate that api key and python package exists in environment."""
-        huggingfacehub_api_token = self.huggingfacehub_api_token or os.getenv(
-            "HF_TOKEN"
+        values["huggingfacehub_api_token"] = get_from_dict_or_env(
+            values, "huggingfacehub_api_token", "HUGGINGFACEHUB_API_TOKEN", None
+        )
+
+        huggingfacehub_api_token = get_from_dict_or_env(
+            values, "huggingfacehub_api_token", "HF_TOKEN", None
         )
 
         try:
@@ -63,38 +63,38 @@ class HuggingFaceEndpointEmbeddings(BaseModel, Embeddings):
                 InferenceClient,
             )
 
-            if self.model:
-                self.repo_id = self.model
-            elif self.repo_id:
-                self.model = self.repo_id
+            if values["model"]:
+                values["repo_id"] = values["model"]
+            elif values["repo_id"]:
+                values["model"] = values["repo_id"]
             else:
-                self.model = DEFAULT_MODEL
-                self.repo_id = DEFAULT_MODEL
+                values["model"] = DEFAULT_MODEL
+                values["repo_id"] = DEFAULT_MODEL
 
             client = InferenceClient(
-                model=self.model,
+                model=values["model"],
                 token=huggingfacehub_api_token,
             )
 
             async_client = AsyncInferenceClient(
-                model=self.model,
+                model=values["model"],
                 token=huggingfacehub_api_token,
             )
 
-            if self.task not in VALID_TASKS:
+            if values["task"] not in VALID_TASKS:
                 raise ValueError(
-                    f"Got invalid task {self.task}, "
+                    f"Got invalid task {values['task']}, "
                     f"currently only {VALID_TASKS} are supported"
                 )
-            self.client = client
-            self.async_client = async_client
+            values["client"] = client
+            values["async_client"] = async_client
 
         except ImportError:
             raise ImportError(
                 "Could not import huggingface_hub python package. "
                 "Please install it with `pip install huggingface_hub`."
             )
-        return self
+        return values
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Call out to HuggingFaceHub's embedding endpoint for embedding search docs.

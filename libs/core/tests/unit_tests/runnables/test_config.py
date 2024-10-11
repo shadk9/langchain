@@ -1,7 +1,7 @@
 import json
 import uuid
 from contextvars import copy_context
-from typing import Any, cast
+from typing import Any, Dict, cast
 
 import pytest
 
@@ -26,7 +26,7 @@ from langchain_core.tracers.stdout import ConsoleCallbackHandler
 
 def test_ensure_config() -> None:
     run_id = str(uuid.uuid4())
-    arg: dict = {
+    arg: Dict = {
         "something": "else",
         "metadata": {"foo": "bar"},
         "configurable": {"baz": "qux"},

@@ -1,25 +1,17 @@
 import logging
-from typing import Any, Iterable, List, Optional
+from typing import Iterable, List, Optional
 
 import voyageai  # type: ignore
 from langchain_core.embeddings import Embeddings
-from langchain_core.utils import secret_from_env
-from pydantic import (
+from langchain_core.pydantic_v1 import (
     BaseModel,
-    ConfigDict,
     Field,
-    PrivateAttr,
     SecretStr,
-    model_validator,
+    root_validator,
 )
-from typing_extensions import Self
+from langchain_core.utils import secret_from_env
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_VOYAGE_2_BATCH_SIZE = 72
-DEFAULT_VOYAGE_3_LITE_BATCH_SIZE = 30
-DEFAULT_VOYAGE_3_BATCH_SIZE = 10
-DEFAULT_BATCH_SIZE = 7
 
 
 class VoyageAIEmbeddings(BaseModel, Embeddings):
@@ -33,8 +25,8 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
             model = VoyageAIEmbeddings()
     """
 
-    _client: voyageai.Client = PrivateAttr()
-    _aclient: voyageai.client_async.AsyncClient = PrivateAttr()
+    _client: voyageai.Client = Field(exclude=True)
+    _aclient: voyageai.client_async.AsyncClient = Field(exclude=True)
     model: str
     batch_size: int
     show_progress_bar: bool = False
@@ -48,40 +40,26 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
         ),
     )
 
-    model_config = ConfigDict(
-        extra="forbid",
-        populate_by_name=True,
-    )
+    class Config:
+        extra = "forbid"
+        allow_population_by_field_name = True
 
-    @model_validator(mode="before")
-    @classmethod
-    def default_values(cls, values: dict) -> Any:
+    @root_validator(pre=True)
+    def default_values(cls, values: dict) -> dict:
         """Set default batch size based on model"""
         model = values.get("model")
         batch_size = values.get("batch_size")
         if batch_size is None:
-            values["batch_size"] = (
-                DEFAULT_VOYAGE_2_BATCH_SIZE
-                if model in ["voyage-2", "voyage-02"]
-                else (
-                    DEFAULT_VOYAGE_3_LITE_BATCH_SIZE
-                    if model == "voyage-3-lite"
-                    else (
-                        DEFAULT_VOYAGE_3_BATCH_SIZE
-                        if model == "voyage-3"
-                        else DEFAULT_BATCH_SIZE
-                    )
-                )
-            )
+            values["batch_size"] = 72 if model in ["voyage-2", "voyage-02"] else 7
         return values
 
-    @model_validator(mode="after")
-    def validate_environment(self) -> Self:
+    @root_validator(pre=False, skip_on_failure=True)
+    def validate_environment(cls, values: dict) -> dict:
         """Validate that VoyageAI credentials exist in environment."""
-        api_key_str = self.voyage_api_key.get_secret_value()
-        self._client = voyageai.Client(api_key=api_key_str)
-        self._aclient = voyageai.client_async.AsyncClient(api_key=api_key_str)
-        return self
+        api_key_str = values["voyage_api_key"].get_secret_value()
+        values["_client"] = voyageai.Client(api_key=api_key_str)
+        values["_aclient"] = voyageai.client_async.AsyncClient(api_key=api_key_str)
+        return values
 
     def _get_batch_iterator(self, texts: List[str]) -> Iterable:
         if self.show_progress_bar:

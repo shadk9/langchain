@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, List
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ class FakeTracer(BaseTracer):
     def __init__(self) -> None:
         """Initialize the tracer."""
         super().__init__()
-        self.runs: list[Run] = []
+        self.runs: List[Run] = []
 
     def _persist_run(self, run: Run) -> None:
         """Persist a run."""
@@ -103,7 +103,7 @@ def test_tracer_chat_model_run() -> None:
         ],
         extra={},
         serialized=SERIALIZED_CHAT,
-        inputs={"prompts": ["Human: "]},
+        inputs=dict(prompts=["Human: "]),
         outputs=LLMResult(generations=[[]]),  # type: ignore[arg-type]
         error=None,
         run_type="llm",
@@ -139,7 +139,7 @@ def test_tracer_multiple_llm_runs() -> None:
         ],
         extra={},
         serialized=SERIALIZED,
-        inputs={"prompts": []},
+        inputs=dict(prompts=[]),
         outputs=LLMResult(generations=[[]]),  # type: ignore[arg-type]
         error=None,
         run_type="llm",
@@ -275,8 +275,8 @@ def test_tracer_nested_run() -> None:
                 ],
                 extra={},
                 serialized={"name": "tool"},
-                inputs={"input": "test"},
-                outputs={"output": "test"},
+                inputs=dict(input="test"),
+                outputs=dict(output="test"),
                 error=None,
                 run_type="tool",
                 trace_id=chain_uuid,
@@ -294,7 +294,7 @@ def test_tracer_nested_run() -> None:
                         ],
                         extra={},
                         serialized=SERIALIZED,
-                        inputs={"prompts": []},
+                        inputs=dict(prompts=[]),
                         outputs=LLMResult(generations=[[]]),  # type: ignore[arg-type]
                         run_type="llm",
                         trace_id=chain_uuid,
@@ -314,7 +314,7 @@ def test_tracer_nested_run() -> None:
                 ],
                 extra={},
                 serialized=SERIALIZED,
-                inputs={"prompts": []},
+                inputs=dict(prompts=[]),
                 outputs=LLMResult(generations=[[]]),  # type: ignore[arg-type]
                 run_type="llm",
                 trace_id=chain_uuid,
@@ -342,7 +342,7 @@ def test_tracer_llm_run_on_error() -> None:
         ],
         extra={},
         serialized=SERIALIZED,
-        inputs={"prompts": []},
+        inputs=dict(prompts=[]),
         outputs=None,
         error=repr(exception),
         run_type="llm",
@@ -373,7 +373,7 @@ def test_tracer_llm_run_on_error_callback() -> None:
         ],
         extra={},
         serialized=SERIALIZED,
-        inputs={"prompts": []},
+        inputs=dict(prompts=[]),
         outputs=None,
         error=repr(exception),
         run_type="llm",
@@ -439,8 +439,9 @@ def test_tracer_tool_run_on_error() -> None:
         ],
         extra={},
         serialized={"name": "tool"},
-        inputs={"input": "test"},
+        inputs=dict(input="test"),
         outputs=None,
+        action="{'name': 'tool'}",
         error=repr(exception),
         run_type="tool",
         trace_id=uuid,
@@ -528,7 +529,7 @@ def test_tracer_nested_runs_on_error() -> None:
                 extra={},
                 serialized=SERIALIZED,
                 error=None,
-                inputs={"prompts": []},
+                inputs=dict(prompts=[]),
                 outputs=LLMResult(generations=[[]], llm_output=None),  # type: ignore[arg-type]
                 run_type="llm",
                 trace_id=chain_uuid,
@@ -546,7 +547,7 @@ def test_tracer_nested_runs_on_error() -> None:
                 extra={},
                 serialized=SERIALIZED,
                 error=None,
-                inputs={"prompts": []},
+                inputs=dict(prompts=[]),
                 outputs=LLMResult(generations=[[]], llm_output=None),  # type: ignore[arg-type]
                 run_type="llm",
                 trace_id=chain_uuid,
@@ -564,8 +565,9 @@ def test_tracer_nested_runs_on_error() -> None:
                 extra={},
                 serialized={"name": "tool"},
                 error=repr(exception),
-                inputs={"input": "test"},
+                inputs=dict(input="test"),
                 outputs=None,
+                action="{'name': 'tool'}",
                 trace_id=chain_uuid,
                 dotted_order=f"20230101T000000000000Z{chain_uuid}.20230101T000000000000Z{tool_uuid}",
                 child_runs=[
@@ -581,7 +583,7 @@ def test_tracer_nested_runs_on_error() -> None:
                         extra={},
                         serialized=SERIALIZED,
                         error=repr(exception),
-                        inputs={"prompts": []},
+                        inputs=dict(prompts=[]),
                         outputs=None,
                         run_type="llm",
                         trace_id=chain_uuid,

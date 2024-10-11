@@ -55,7 +55,6 @@ EXPECTED_ALL = [
     "DedocFileLoader",
     "DedocPDFLoader",
     "PebbloSafeLoader",
-    "PebbloTextLoader",
     "DiffbotLoader",
     "DirectoryLoader",
     "DiscordChatLoader",

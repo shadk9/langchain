@@ -14,9 +14,6 @@ test integration_tests:
 tests:
 	poetry run pytest $(TEST_FILE)
 
-test_watch:
-	poetry run ptw --snapshot-update --now . -- -vv $(TEST_FILE)
-
 
 ######################
 # LINTING AND FORMATTING

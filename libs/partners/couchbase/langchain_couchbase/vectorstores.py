@@ -377,9 +377,6 @@ class CouchbaseVectorStore(VectorStore):
         if metadatas is None:
             metadatas = [{} for _ in texts]
 
-        # Check if TTL is provided
-        ttl = kwargs.get("ttl", None)
-
         embedded_texts = self._embedding_function.embed_documents(list(texts))
 
         documents_to_insert = [
@@ -399,11 +396,7 @@ class CouchbaseVectorStore(VectorStore):
         for i in range(0, len(documents_to_insert), batch_size):
             batch = documents_to_insert[i : i + batch_size]
             try:
-                # Insert with TTL if provided
-                if ttl:
-                    result = self._collection.upsert_multi(batch[0], expiry=ttl)
-                else:
-                    result = self._collection.upsert_multi(batch[0])
+                result = self._collection.upsert_multi(batch[0])
                 if result.all_ok:
                     doc_ids.extend(batch[0].keys())
             except DocumentExistsException as e:

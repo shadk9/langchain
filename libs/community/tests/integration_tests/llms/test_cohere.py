@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import SecretStr
+from langchain_core.pydantic_v1 import SecretStr
 from pytest import MonkeyPatch
 
 from langchain_community.llms.cohere import Cohere

@@ -1,6 +1,6 @@
 """Test in memory indexer"""
 
-from collections.abc import AsyncGenerator, Generator
+from typing import AsyncGenerator, Generator
 
 import pytest
 from langchain_standard_tests.integration_tests.indexer import (

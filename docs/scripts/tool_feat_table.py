@@ -81,7 +81,7 @@ CODE_INTERPRETER_TOOL_FEAT_TABLE = {
     "Riza Code Interpreter": {
         "langauges": "Python, JavaScript, PHP, Ruby",
         "sandbox_lifetime": "Resets on Execution",
-        "upload": True,
+        "upload": False,
         "return_results": "Text",
         "link": "/docs/integrations/tools/riza",
         "self_hosting": True,

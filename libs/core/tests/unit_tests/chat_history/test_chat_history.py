@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from typing import List, Sequence
 
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -8,7 +8,7 @@ def test_add_message_implementation_only() -> None:
     """Test implementation of add_message only."""
 
     class SampleChatHistory(BaseChatMessageHistory):
-        def __init__(self, *, store: list[BaseMessage]) -> None:
+        def __init__(self, *, store: List[BaseMessage]) -> None:
             self.store = store
 
         def add_message(self, message: BaseMessage) -> None:
@@ -17,9 +17,9 @@ def test_add_message_implementation_only() -> None:
 
         def clear(self) -> None:
             """Clear the store."""
-            raise NotImplementedError
+            raise NotImplementedError()
 
-    store: list[BaseMessage] = []
+    store: List[BaseMessage] = []
     chat_history = SampleChatHistory(store=store)
     chat_history.add_message(HumanMessage(content="Hello"))
     assert len(store) == 1
@@ -38,10 +38,10 @@ def test_add_message_implementation_only() -> None:
 
 def test_bulk_message_implementation_only() -> None:
     """Test that SampleChatHistory works as expected."""
-    store: list[BaseMessage] = []
+    store: List[BaseMessage] = []
 
     class BulkAddHistory(BaseChatMessageHistory):
-        def __init__(self, *, store: list[BaseMessage]) -> None:
+        def __init__(self, *, store: List[BaseMessage]) -> None:
             self.store = store
 
         def add_messages(self, message: Sequence[BaseMessage]) -> None:
@@ -50,7 +50,7 @@ def test_bulk_message_implementation_only() -> None:
 
         def clear(self) -> None:
             """Clear the store."""
-            raise NotImplementedError
+            raise NotImplementedError()
 
     chat_history = BulkAddHistory(store=store)
     chat_history.add_message(HumanMessage(content="Hello"))

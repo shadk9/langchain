@@ -3,7 +3,7 @@
 from typing import Any, Union
 
 from langchain_core.callbacks import BaseCallbackHandler
-from pydantic import BaseModel
+from langchain_core.pydantic_v1 import BaseModel
 
 
 class BaseFakeCallbackHandler(BaseModel):
@@ -251,6 +251,5 @@ class FakeCallbackHandler(BaseCallbackHandler, BaseFakeCallbackHandlerMixin):
     ) -> Any:
         self.on_retriever_error_common()
 
-    # Overriding since BaseModel has __deepcopy__ method as well
-    def __deepcopy__(self, memo: dict) -> "FakeCallbackHandler":  # type: ignore
+    def __deepcopy__(self, memo: dict) -> "FakeCallbackHandler":
         return self

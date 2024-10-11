@@ -1,14 +1,13 @@
 import json
-from collections.abc import AsyncIterator, Iterator
-from typing import Any
+from typing import Any, AsyncIterator, Iterator, Tuple
 
 import pytest
-from pydantic import BaseModel
 
 from langchain_core.exceptions import OutputParserException
 from langchain_core.output_parsers.json import (
     SimpleJsonOutputParser,
 )
+from langchain_core.pydantic_v1 import BaseModel
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_core.utils.json import parse_json_markdown, parse_partial_json
 from tests.unit_tests.pydantic_utils import _schema
@@ -136,7 +135,7 @@ WITHOUT_END_BRACKET = """Here is a response formatted as schema:
 ```json
 {
   "foo": "bar"
-
+  
 
 """
 
@@ -146,7 +145,7 @@ WITH_END_BRACKET = """Here is a response formatted as schema:
 {
   "foo": "bar"
 }
-
+  
 """
 
 WITH_END_TICK = """Here is a response formatted as schema:
@@ -155,7 +154,7 @@ WITH_END_TICK = """Here is a response formatted as schema:
 {
   "foo": "bar"
 }
-```
+``` 
 """
 
 WITH_END_TEXT = """Here is a response formatted as schema:
@@ -164,8 +163,8 @@ WITH_END_TEXT = """Here is a response formatted as schema:
 {
   "foo": "bar"
 
-```
-This should do the trick
+``` 
+This should do the trick 
 """
 
 TEST_CASES = [
@@ -246,7 +245,7 @@ TEST_CASES_PARTIAL = [
 
 
 @pytest.mark.parametrize("json_strings", TEST_CASES_PARTIAL)
-def test_parse_partial_json(json_strings: tuple[str, str]) -> None:
+def test_parse_partial_json(json_strings: Tuple[str, str]) -> None:
     case, expected = json_strings
     parsed = parse_partial_json(case)
     assert parsed == json.loads(expected)
@@ -596,10 +595,10 @@ def test_base_model_schema_consistency() -> None:
         setup: str
         punchline: str
 
-    initial_joke_schema = dict(_schema(Joke).items())
+    initial_joke_schema = {k: v for k, v in _schema(Joke).items()}
     SimpleJsonOutputParser(pydantic_object=Joke)
     openai_func = convert_to_openai_function(Joke)
-    retrieved_joke_schema = dict(_schema(Joke).items())
+    retrieved_joke_schema = {k: v for k, v in _schema(Joke).items()}
 
     assert initial_joke_schema == retrieved_joke_schema
     assert openai_func.get("name", None) is not None

@@ -4,14 +4,8 @@ from typing import (
 )
 
 from langchain_core.embeddings import Embeddings
+from langchain_core.pydantic_v1 import BaseModel, Field, root_validator
 from ollama import AsyncClient, Client
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    PrivateAttr,
-    model_validator,
-)
-from typing_extensions import Self
 
 
 class OllamaEmbeddings(BaseModel, Embeddings):
@@ -132,27 +126,29 @@ class OllamaEmbeddings(BaseModel, Embeddings):
     For a full list of the params, see [this link](https://pydoc.dev/httpx/latest/httpx.Client.html)
     """
 
-    _client: Client = PrivateAttr(default=None)
+    _client: Client = Field(default=None)
     """
     The client to use for making requests.
     """
 
-    _async_client: AsyncClient = PrivateAttr(default=None)
+    _async_client: AsyncClient = Field(default=None)
     """
     The async client to use for making requests.
     """
 
-    model_config = ConfigDict(
-        extra="forbid",
-    )
+    class Config:
+        """Configuration for this pydantic object."""
 
-    @model_validator(mode="after")
-    def _set_clients(self) -> Self:
+        extra = "forbid"
+
+    @root_validator(pre=False, skip_on_failure=True)
+    def _set_clients(cls, values: dict) -> dict:
         """Set clients to use for ollama."""
-        client_kwargs = self.client_kwargs or {}
-        self._client = Client(host=self.base_url, **client_kwargs)
-        self._async_client = AsyncClient(host=self.base_url, **client_kwargs)
-        return self
+        values["_client"] = Client(host=values["base_url"], **values["client_kwargs"])
+        values["_async_client"] = AsyncClient(
+            host=values["base_url"], **values["client_kwargs"]
+        )
+        return values
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed search docs."""

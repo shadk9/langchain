@@ -17,7 +17,7 @@ from langchain_core.messages import (
     BaseMessage,
 )
 from langchain_core.outputs import ChatGeneration, ChatResult
-from pydantic import model_validator
+from langchain_core.pydantic_v1 import validator
 from pymongo.collection import Collection
 from pymongo.results import DeleteResult, InsertManyResult
 
@@ -134,14 +134,15 @@ class FakeLLM(LLM):
     sequential_responses: Optional[bool] = False
     response_index: int = 0
 
-    @model_validator(mode="before")
-    @classmethod
-    def check_queries_required(cls, values: dict) -> dict:
-        if values.get("sequential_response") and not values.get("queries"):
+    @validator("queries", always=True)
+    def check_queries_required(
+        cls, queries: Optional[Mapping], values: Mapping[str, Any]
+    ) -> Optional[Mapping]:
+        if values.get("sequential_response") and not queries:
             raise ValueError(
                 "queries is required when sequential_response is set to True"
             )
-        return values
+        return queries
 
     def get_num_tokens(self, text: str) -> int:
         """Return number of tokens."""
